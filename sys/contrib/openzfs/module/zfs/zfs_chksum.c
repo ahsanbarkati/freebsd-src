@@ -28,6 +28,7 @@
 #include <sys/zfs_chksum.h>
 #include <sys/zfs_impl.h>
 
+#include <sys/tslog.h>
 #include <sys/blake3.h>
 #include <sys/sha2.h>
 
@@ -238,6 +239,8 @@ abort:
 static void
 chksum_benchmark(void)
 {
+
+	TSENTER();
 #ifndef _KERNEL
 	/* we need the benchmark only for the kernel module */
 	return;
@@ -261,6 +264,8 @@ chksum_benchmark(void)
 	/* edonr - needs to be the first one here (slow CPU check) */
 	cs = &chksum_stat_data[cbid++];
 
+	
+	TSENTER2("edonr");
 	/* edonr */
 	cs->init = abd_checksum_edonr_tmpl_init;
 	cs->func = abd_checksum_edonr_native;
@@ -268,7 +273,9 @@ chksum_benchmark(void)
 	cs->name = "edonr";
 	cs->impl = "generic";
 	chksum_benchit(cs);
+	TSEXIT2("edonr");
 
+	TSENTER2("skein");
 	/* skein */
 	cs = &chksum_stat_data[cbid++];
 	cs->init = abd_checksum_skein_tmpl_init;
@@ -277,7 +284,9 @@ chksum_benchmark(void)
 	cs->name = "skein";
 	cs->impl = "generic";
 	chksum_benchit(cs);
+	TSEXIT2("skein");
 
+	TSENTER2("sha256");
 	/* sha256 */
 	id_save = sha256->getid();
 	for (max = 0, id = 0; id < sha256->getcnt(); id++) {
@@ -295,7 +304,9 @@ chksum_benchmark(void)
 		}
 	}
 	sha256->setid(id_save);
+	TSEXIT2("sha256");
 
+	TSENTER2("sha512");
 	/* sha512 */
 	id_save = sha512->getid();
 	for (max = 0, id = 0; id < sha512->getcnt(); id++) {
@@ -313,7 +324,9 @@ chksum_benchmark(void)
 		}
 	}
 	sha512->setid(id_save);
+	TSEXIT2("sha512");
 
+	TSENTER2("blake3");
 	/* blake3 */
 	id_save = blake3->getid();
 	for (max = 0, id = 0; id < blake3->getcnt(); id++) {
@@ -330,23 +343,31 @@ chksum_benchmark(void)
 			blake3->set_fastest(id);
 		}
 	}
+	TSEXIT2("blake3");
 	blake3->setid(id_save);
+	TSEXIT();
 }
 
 void
 chksum_init(void)
 {
+	TSENTER();
 #ifdef _KERNEL
 	blake3_per_cpu_ctx_init();
 #endif
-
+	
+	TSENTER2("benchmark");
 	/* Benchmark supported implementations */
 	chksum_benchmark();
+	TSEXIT2("benchmark");
 
+	TSENTER2("kstat_create");
 	/* Install kstats for all implementations */
 	chksum_kstat = kstat_create("zfs", 0, "chksum_bench", "misc",
 	    KSTAT_TYPE_RAW, 0, KSTAT_FLAG_VIRTUAL);
+	TSEXIT2("kstat_create");
 
+	TSENTER2("kstat_install");
 	if (chksum_kstat != NULL) {
 		chksum_kstat->ks_data = NULL;
 		chksum_kstat->ks_ndata = UINT32_MAX;
@@ -356,6 +377,8 @@ chksum_init(void)
 		    chksum_kstat_addr);
 		kstat_install(chksum_kstat);
 	}
+	TSEXIT2("kstat_install");
+	TSEXIT();
 }
 
 void

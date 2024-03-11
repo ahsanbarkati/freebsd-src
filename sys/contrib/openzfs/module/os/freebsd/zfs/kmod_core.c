@@ -88,6 +88,7 @@
 #include "zfs_deleg.h"
 #include "zfs_namecheck.h"
 #include "zfs_prop.h"
+#include <sys/tslog.h>
 
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_DECL(_vfs_zfs_vdev);
@@ -118,6 +119,7 @@ static int
 zfsdev_ioctl(struct cdev *dev, ulong_t zcmd, caddr_t arg, int flag,
     struct thread *td)
 {
+	TSENTER();
 	uint_t len;
 	int vecnum;
 	zfs_iocparm_t *zp;
@@ -182,6 +184,7 @@ out:
 #endif
 	vmem_free(zc, sizeof (zfs_cmd_t));
 	MPASS(tsd_get(rrw_tsd_key) == NULL);
+	TSEXIT();
 	return (error);
 }
 
@@ -207,12 +210,13 @@ static int
 zfsdev_open(struct cdev *devp __unused, int flag __unused, int mode __unused,
     struct thread *td __unused)
 {
+	TSENTER();
 	int error;
 
 	mutex_enter(&zfsdev_state_lock);
 	error = zfsdev_state_init(NULL);
 	mutex_exit(&zfsdev_state_lock);
-
+	TSEXIT();
 	return (error);
 }
 
@@ -225,7 +229,8 @@ static struct cdevsw zfs_cdevsw = {
 
 int
 zfsdev_attach(void)
-{
+{	
+	TSENTER();
 	struct make_dev_args args;
 
 	make_dev_args_init(&args);
@@ -235,6 +240,7 @@ zfsdev_attach(void)
 	args.mda_uid = UID_ROOT;
 	args.mda_gid = GID_OPERATOR;
 	args.mda_mode = 0666;
+	TSEXIT();
 	return (make_dev_s(&args, &zfsdev, ZFS_DRIVER));
 }
 
@@ -248,6 +254,7 @@ zfsdev_detach(void)
 int
 zfs__init(void)
 {
+	TSENTER();
 	int error;
 
 #if KSTACK_PAGES < ZFS_MIN_KSTACK_PAGES
@@ -256,21 +263,28 @@ zfs__init(void)
 	    "'options KSTACK_PAGES=%d' to your kernel config\n", KSTACK_PAGES,
 	    ZFS_MIN_KSTACK_PAGES);
 #endif
+	TSENTER2("root_mount_hold");
 	zfs_root_token = root_mount_hold("ZFS");
+	TSEXIT2("root_mount_hold");
+	
+	TSENTER2("zfs_kmod_init");
 	if ((error = zfs_kmod_init()) != 0) {
 		printf("ZFS: Failed to Load ZFS Filesystem"
 		    ", rc = %d\n", error);
 		root_mount_rel(zfs_root_token);
 		return (error);
 	}
-
-
+	TSEXIT2("zfs_kmod_init");
+	
+	TSENTER2("after");
 	tsd_create(&zfs_geom_probe_vdev_key, NULL);
 
 	printf("ZFS storage pool version: features support ("
 	    SPA_VERSION_STRING ")\n");
 	root_mount_rel(zfs_root_token);
 	ddi_sysevent_init();
+	TSEXIT2("after");
+	TSEXIT();
 	return (0);
 }
 
@@ -300,6 +314,7 @@ zfs_shutdown(void *arg __unused, int howto __unused)
 static int
 zfs_modevent(module_t mod, int type, void *unused __unused)
 {
+	TSENTER();
 	int err;
 
 	switch (type) {
@@ -321,6 +336,7 @@ zfs_modevent(module_t mod, int type, void *unused __unused)
 	default:
 		break;
 	}
+	TSEXIT();
 	return (EOPNOTSUPP);
 }
 

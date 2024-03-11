@@ -217,6 +217,7 @@
 #include "zfs_deleg.h"
 #include "zfs_comutil.h"
 
+#include <sys/tslog.h>
 #include <sys/lua/lua.h>
 #include <sys/lua/lauxlib.h>
 #include <sys/zfs_ioctl_impl.h>
@@ -7881,14 +7882,23 @@ out:
 int
 zfs_kmod_init(void)
 {
+	TSENTER();
 	int error;
 
+	TSENTER2("zvol_init");
 	if ((error = zvol_init()) != 0)
 		return (error);
+	TSEXIT2("zvol_init");
 
+	TSENTER2("spa_init");
 	spa_init(SPA_MODE_READ | SPA_MODE_WRITE);
+	TSEXIT2("spa_init");
+	
+	TSENTER2("zfs_init");
 	zfs_init();
+	TSEXIT2("zfs_init");
 
+	TSENTER2("rest");
 	zfs_ioctl_init();
 
 	mutex_init(&zfsdev_state_lock, NULL, MUTEX_DEFAULT, NULL);
@@ -7899,13 +7909,14 @@ zfs_kmod_init(void)
 
 	tsd_create(&rrw_tsd_key, rrw_tsd_destroy);
 	tsd_create(&zfs_allow_log_key, zfs_allow_log_destroy);
+	TSEXIT2("rest");
 
 	return (0);
 out:
 	zfs_fini();
 	spa_fini();
 	zvol_fini();
-
+	TSEXIT();
 	return (error);
 }
 

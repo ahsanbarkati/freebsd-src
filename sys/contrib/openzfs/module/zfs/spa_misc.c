@@ -66,6 +66,7 @@
 #include <sys/zfeature.h>
 #include <sys/qat.h>
 #include <sys/zstd/zstd.h>
+#include <sys/tslog.h>
 
 /*
  * SPA locking
@@ -2477,6 +2478,8 @@ spa_boot_init(void)
 void
 spa_init(spa_mode_t mode)
 {
+	TSENTER();
+	TSENTER2("above");
 	mutex_init(&spa_namespace_lock, NULL, MUTEX_DEFAULT, NULL);
 	mutex_init(&spa_spare_lock, NULL, MUTEX_DEFAULT, NULL);
 	mutex_init(&spa_l2cache_lock, NULL, MUTEX_DEFAULT, NULL);
@@ -2509,30 +2512,62 @@ spa_init(spa_mode_t mode)
 		}
 	}
 #endif
+	
 
+	TSEXIT2("above");
+
+	TSENTER2("phase1");
 	fm_init();
 	zfs_refcount_init();
 	unique_init();
 	zfs_btree_init();
+	TSEXIT2("phase1");
+	TSENTER2("phase2");
 	metaslab_stat_init();
 	brt_init();
 	ddt_init();
 	zio_init();
 	dmu_init();
 	zil_init();
+	TSEXIT2("phase2");
+
+
+	TSENTER2("phase3");
+
+	TSENTER2("phase3_1");
 	vdev_mirror_stat_init();
+	TSEXIT2("phase3_1");
+	TSENTER2("phase3_2");
 	vdev_raidz_math_init();
+	TSEXIT2("phase3_2");
+	TSENTER2("phase3_3");
 	vdev_file_init();
+	TSEXIT2("phase3_3");
+	TSENTER2("phase3_4");
 	zfs_prop_init();
+	TSEXIT2("phase3_4");
+	TSENTER2("phase3_5");
 	chksum_init();
+	TSEXIT2("phase3_5");
+	TSENTER2("phase3_6");
 	zpool_prop_init();
+	TSEXIT2("phase3_6");
+	TSENTER2("phase3_7");
 	zpool_feature_init();
+	TSEXIT2("phase3_7");
+
+	TSEXIT2("phase3");
+	
+	
+	TSENTER2("phase4");
 	spa_config_load();
 	vdev_prop_init();
 	l2arc_start();
 	scan_init();
 	qat_init();
 	spa_import_progress_init();
+	TSEXIT2("phase4");
+	TSEXIT();
 }
 
 void
